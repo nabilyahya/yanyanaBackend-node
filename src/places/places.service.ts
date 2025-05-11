@@ -4,6 +4,8 @@ import { Model } from 'mongoose';
 import { Place, PlaceDocument } from './schemas/place.schema';
 import { CreatePlaceDto } from './dtos/create-place.dto';
 import { UpdatePlaceDto } from './dtos/update-place.dto';
+import { plainToInstance } from 'class-transformer';
+import { PlaceResponseDto } from './dtos/place-response.dto';
 
 @Injectable()
 export class PlacesService {
@@ -11,27 +13,45 @@ export class PlacesService {
     @InjectModel(Place.name) private placeModel: Model<PlaceDocument>,
   ) {}
 
-  async findAll(): Promise<PlaceDocument[]> {
-    return this.placeModel.find().exec();
-  }
+  async findAll(): Promise<PlaceResponseDto[]> {
+    const places = await this.placeModel.find().lean();
 
-  async findById(id: string): Promise<PlaceDocument> {
+    return plainToInstance(PlaceResponseDto, places, {
+      excludeExtraneousValues: true,
+    });
+  }
+  async findById(id: string): Promise<PlaceResponseDto> {
     const place = await this.placeModel.findById(id).exec();
     if (!place) throw new NotFoundException(`Place ${id} not found`);
-    return place;
+    return plainToInstance(PlaceResponseDto, id, {
+      excludeExtraneousValues: true,
+    });
   }
 
-  async create(dto: CreatePlaceDto): Promise<PlaceDocument> {
-    const place = new this.placeModel(dto);
-    return place.save();
+  async create(createPlaceDto: CreatePlaceDto): Promise<PlaceResponseDto> {
+    const createdPlace = new this.placeModel(createPlaceDto);
+    const savedPlace = await createdPlace.save();
+
+    return plainToInstance(
+      PlaceResponseDto,
+      savedPlace.toObject({ versionKey: false }),
+      {
+        excludeExtraneousValues: true,
+      },
+    );
   }
 
-  async update(id: string, dto: UpdatePlaceDto): Promise<PlaceDocument> {
+  async update(id: string, dto: UpdatePlaceDto): Promise<PlaceResponseDto> {
     const updated = await this.placeModel
       .findByIdAndUpdate(id, dto, { new: true })
+      .lean()
       .exec();
+
     if (!updated) throw new NotFoundException(`Place ${id} not found`);
-    return updated;
+
+    return plainToInstance(PlaceResponseDto, updated, {
+      excludeExtraneousValues: true,
+    });
   }
 
   async delete(id: string): Promise<void> {

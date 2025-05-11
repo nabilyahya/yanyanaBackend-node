@@ -6,8 +6,11 @@ import {
   IsMongoId,
   IsArray,
 } from 'class-validator';
-
+import { Expose, Type } from 'class-transformer';
 export class CreatePlaceDto {
+  @Expose()
+  id: string;
+
   @IsString()
   @IsNotEmpty()
   name: string;

@@ -47,4 +47,19 @@ export class PlacesController {
   async delete(@Param('id') id: string): Promise<void> {
     return this.placesService.delete(id);
   }
+
+  @Get('by-area/:country/:city/:district/:categoryId')
+  async getPlacesByAreaAndCategory(
+    @Param('country') country: string,
+    @Param('city') city: string,
+    @Param('district') district: string,
+    @Param('categoryId') categoryId: string,
+  ) {
+    return this.placesService.getPlacesByAreaAndCategory(
+      country,
+      city,
+      district,
+      categoryId,
+    );
+  }
 }

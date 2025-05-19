@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { UpdateUserDto } from './dtos/update-user.dto';
+import { RegisterDto } from 'src/auth/dtos/register.dto';
 
 @Injectable()
 export class UsersService {
@@ -19,7 +20,11 @@ export class UsersService {
     return user;
   }
 
-  async create(dto: CreateUserDto) {
+  async findByEmail(email: string) {
+    return this.userModel.findOne({ email });
+  }
+
+  async create(dto: RegisterDto) {
     const user = new this.userModel(dto);
     return user.save();
   }

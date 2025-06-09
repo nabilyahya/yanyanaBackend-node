@@ -1,45 +1,58 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { User, UserDocument } from './schemas/user.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from './entities/user.entity';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { UpdateUserDto } from './dtos/update-user.dto';
 import { RegisterDto } from 'src/auth/dtos/register.dto';
+import { UserRole } from './entities/userRole.entity';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+  ) {}
 
-  async findAll() {
-    return this.userModel.find();
+  async findAll(): Promise<User[]> {
+    return this.userRepo.find();
   }
 
-  async findOne(id: string) {
-    const user = await this.userModel.findById(id);
+  async findOne(id: number): Promise<User> {
+    const user = await this.userRepo.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
     return user;
   }
 
-  async findByEmail(email: string) {
-    return this.userModel.findOne({ email });
+  async findByEmail(email: string): Promise<User | null> {
+    return this.userRepo.findOne({ where: { email } });
   }
 
-  async create(dto: RegisterDto) {
-    const user = new this.userModel(dto);
-    return user.save();
+  async create(dto: CreateUserDto): Promise<User> {
+    const user = this.userRepo.create(dto);
+    return this.userRepo.save(user);
   }
 
-  async update(id: string, dto: UpdateUserDto) {
-    const updated = await this.userModel.findByIdAndUpdate(id, dto, {
-      new: true,
-    });
-    if (!updated) throw new NotFoundException('User not found');
-    return updated;
+  async update(id: number, dto: UpdateUserDto): Promise<User> {
+    const user = await this.findOne(id);
+
+    // معالجة تغيير الدور إذا تم تمريره
+    if (dto.role) {
+      const roleEntity = new UserRole();
+      roleEntity.role = dto.role;
+      roleEntity.user = user;
+      user.role = roleEntity;
+    }
+
+    // إزالة الدور من dto لتجنب دمج غير صحيح
+    const { role, ...rest } = dto;
+    const updated = this.userRepo.merge(user, rest);
+
+    return this.userRepo.save(updated);
   }
 
-  async remove(id: string) {
-    const deleted = await this.userModel.findByIdAndDelete(id);
-    if (!deleted) throw new NotFoundException('User not found');
-    return deleted;
+  async remove(id: number): Promise<User> {
+    const user = await this.findOne(id);
+    return this.userRepo.remove(user);
   }
 }

@@ -1,25 +1,28 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Area, AreaDocument } from './schemas/area.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Area } from './entities/area.entity';
 import { CreateAreaDto } from './dtos/create-area.dto';
 import { UpdateAreaDto } from './dtos/update-area.dto';
 
 @Injectable()
 export class AreasService {
-  constructor(@InjectModel(Area.name) private areaModel: Model<AreaDocument>) {}
+  constructor(
+    @InjectRepository(Area)
+    private readonly areaRepo: Repository<Area>,
+  ) {}
 
   async create(dto: CreateAreaDto): Promise<Area> {
-    const newArea = new this.areaModel(dto);
-    return newArea.save();
+    const newArea = this.areaRepo.create(dto);
+    return this.areaRepo.save(newArea);
   }
 
   async findAll(): Promise<Area[]> {
-    return this.areaModel.find().exec();
+    return this.areaRepo.find();
   }
 
-  async findById(id: string): Promise<Area> {
-    const area = await this.areaModel.findById(id).exec();
+  async findById(id: number): Promise<Area> {
+    const area = await this.areaRepo.findOne({ where: { id } });
     if (!area) throw new NotFoundException('Area not found');
     return area;
   }
@@ -29,17 +32,19 @@ export class AreasService {
     city: string,
     district: string,
   ): Promise<Area | null> {
-    return this.areaModel.findOne({ country, city, district }).exec();
+    return this.areaRepo.findOne({
+      where: { country, city, district },
+    });
   }
 
-  async update(id: string, dto: UpdateAreaDto): Promise<Area> {
-    const area = await this.areaModel.findByIdAndUpdate(id, dto, { new: true });
-    if (!area) throw new NotFoundException('Area not found');
-    return area;
+  async update(id: number, dto: UpdateAreaDto): Promise<Area> {
+    const area = await this.findById(id);
+    const updated = Object.assign(area, dto);
+    return this.areaRepo.save(updated);
   }
 
-  async remove(id: string): Promise<void> {
-    const area = await this.areaModel.findByIdAndDelete(id);
-    if (!area) throw new NotFoundException('Area not found');
+  async remove(id: number): Promise<void> {
+    const area = await this.findById(id);
+    await this.areaRepo.remove(area);
   }
 }

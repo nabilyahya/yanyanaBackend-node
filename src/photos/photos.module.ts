@@ -2,12 +2,11 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PhotosService } from './photos.service';
 import { PhotosController } from './photos.controller';
-import { Photo, PhotoSchema } from './schemas/photo.schema';
+import { Photo } from './entities/photo.schema';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([{ name: Photo.name, schema: PhotoSchema }]),
-  ],
+  imports: [TypeOrmModule.forFeature([Photo])],
   providers: [PhotosService],
   controllers: [PhotosController],
 })

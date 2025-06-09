@@ -1,32 +1,56 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { AuthModule } from './auth/auth.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { PlacesModule } from './places/places.module';
-import { ReviewsModule } from './reviews/reviews.module';
-import { ConfigModule } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
+import { GeoModule } from './geo/geo.module';
 import { PhotosModule } from './photos/photos.module';
 import { CategoriesModule } from './categories/categories.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { Area } from './area/entities/area.entity';
 import { AreasModule } from './area/area.module';
+import { GeonamesModule } from './geonames/geonames.module';
+// import { GeoModule } from './geo/geo.module'; // وحدة للقاعدة الجغرافية
 
 @Module({
   imports: [
-    AuthModule,
+    ConfigModule.forRoot({ isGlobal: true }),
+
+    // الاتصال بقاعدة بيانات التطبيق الرئيسية
+    TypeOrmModule.forRoot({
+      name: 'default', // هذا هو الاتصال الرئيسي
+      type: 'postgres',
+      host: process.env.APP_DB_HOST,
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      username: process.env.APP_DB_USERNAME,
+      password: process.env.APP_DB_PASSWORD,
+      database: process.env.APP_DB_NAME,
+      autoLoadEntities: true,
+      synchronize: true,
+    }),
+
+    // الاتصال بقاعدة البيانات الجغرافية
+    TypeOrmModule.forRoot({
+      name: 'geo', // اسم مخصص للاتصال الجغرافي
+      type: 'postgres',
+      host: process.env.GEO_DB_HOST,
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      username: process.env.GEO_DB_USERNAME,
+      password: process.env.GEO_DB_PASSWORD,
+      database: process.env.GEO_DB_NAME,
+      autoLoadEntities: true,
+      synchronize: true,
+    }),
+
     UsersModule,
-    AreasModule,
     PlacesModule,
+    GeoModule,
     PhotosModule,
     CategoriesModule,
     ReviewsModule,
-    ConfigModule.forRoot({ isGlobal: true }),
-    MongooseModule.forRoot(
-      process.env.MONGO_URI || 'mongodb://localhost:27017/places_db',
-    ),
+    UsersModule,
+    AreasModule,
+    GeonamesModule,
   ],
-
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

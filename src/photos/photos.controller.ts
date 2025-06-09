@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Delete,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { PhotosService } from './photos.service';
 import { CreatePhotoDto } from './dtos/create-photo.dto';
@@ -21,7 +22,7 @@ export class PhotosController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseIntPipe) id: number) {
     return this.photosService.findOne(id);
   }
 
@@ -31,12 +32,12 @@ export class PhotosController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdatePhotoDto) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePhotoDto) {
     return this.photosService.update(id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id', ParseIntPipe) id: number) {
     return this.photosService.remove(id);
   }
 }

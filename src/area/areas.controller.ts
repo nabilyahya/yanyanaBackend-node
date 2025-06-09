@@ -8,6 +8,7 @@ import {
   Body,
   UsePipes,
   ValidationPipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { AreasService } from './areas.service';
 import { CreateAreaDto } from './dtos/create-area.dto';
@@ -23,7 +24,7 @@ export class AreasController {
   }
 
   @Get(':id')
-  async findById(@Param('id') id: string) {
+  async findById(@Param('id', ParseIntPipe) id: number) {
     return this.areasService.findById(id);
   }
 
@@ -35,12 +36,15 @@ export class AreasController {
 
   @Patch(':id')
   @UsePipes(new ValidationPipe({ whitelist: true }))
-  async update(@Param('id') id: string, @Body() dto: UpdateAreaDto) {
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAreaDto,
+  ) {
     return this.areasService.update(id, dto);
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id', ParseIntPipe) id: number) {
     return this.areasService.remove(id);
   }
 }

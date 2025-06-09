@@ -5,19 +5,18 @@ import {
   IsOptional,
   IsEnum,
 } from 'class-validator';
-import { UserRole } from 'src/common/enums/user-role.enum';
+import { UserRole } from '../entities/userRole.entity';
 
 export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
-  name: string;
+  username: string;
 
   @IsEmail()
   email: string;
 
   @IsString()
-  @IsNotEmpty()
-  password: string;
+  passwordHash: string;
 
   @IsOptional()
   @IsEnum(UserRole)

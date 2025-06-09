@@ -1,3 +1,4 @@
+// reviews.controller.ts
 import {
   Body,
   Controller,
@@ -8,39 +9,32 @@ import {
   Patch,
   Post,
   Req,
-  UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
 import { ReviewResponseDto } from './dtos/review-response.dto';
-import { ReviewDocument } from './schemas/review.schema';
-import { AddCommentDto } from './dtos/add-comment.dto';
-import { Model } from 'mongoose';
-import { InjectModel } from '@nestjs/mongoose';
 import { CreateReviewDto } from './dtos/create-review.dto';
+import { AddCommentDto } from './dtos/add-comment.dto';
 import { UpdateRatingDto } from './dtos/update-rating.dto';
-// import { JwtAuthGuard } from '../auth/jwt-auth.guard'; // if you want auth
+import { Review } from './entities/review.entity';
 
 @Controller('reviews')
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
-  // GET /reviews
   @Get()
   async getAll(): Promise<ReviewResponseDto[]> {
     const reviews = await this.reviewsService.findAll();
     return reviews.map(this.toReviewResponseDto);
   }
 
-  // GET /reviews/:id
   @Get(':id')
   async getById(@Param('id') id: string): Promise<ReviewResponseDto> {
     const review = await this.reviewsService.findById(id);
     return this.toReviewResponseDto(review);
   }
 
-  // GET /reviews/place/:placeId
   @Get('place/:placeId')
   async getByPlace(
     @Param('placeId') placeId: string,
@@ -49,7 +43,6 @@ export class ReviewsController {
     return reviews.map(this.toReviewResponseDto);
   }
 
-  // POST /reviews
   @Post()
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async create(
@@ -60,7 +53,6 @@ export class ReviewsController {
     return this.toReviewResponseDto(review);
   }
 
-  // PATCH /reviews/:id/comment
   @Patch(':id/comment')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async addComment(
@@ -71,7 +63,6 @@ export class ReviewsController {
     return this.toReviewResponseDto(review);
   }
 
-  // PATCH /reviews/:id/rating
   @Patch(':id/rating')
   @UsePipes(new ValidationPipe({ whitelist: true }))
   async updateRating(
@@ -82,17 +73,16 @@ export class ReviewsController {
     return this.toReviewResponseDto(review);
   }
 
-  // DELETE /reviews/:id
   @Delete(':id')
   async delete(@Param('id') id: string): Promise<void> {
     await this.reviewsService.delete(id);
   }
 
-  private toReviewResponseDto(r: ReviewDocument): ReviewResponseDto {
+  private toReviewResponseDto(r: Review): ReviewResponseDto {
     return {
-      id: r._id.toString(),
-      user: r.user.toString(),
-      place: r.place.toString(),
+      id: r.id.toString(),
+      user: r.user.id.toString(),
+      place: r.place.id.toString(),
       rating: r.rating,
       comment: r.comment,
       createdAt: r.createdAt,

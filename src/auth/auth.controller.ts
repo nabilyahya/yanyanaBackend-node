@@ -11,13 +11,13 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dtos/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CreateUserDto } from 'src/users/dtos/create-user.dto';
+import { RegisterDto } from './dtos/register.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
-
   @Post('register')
-  async register(@Body() dto: CreateUserDto) {
+  async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 

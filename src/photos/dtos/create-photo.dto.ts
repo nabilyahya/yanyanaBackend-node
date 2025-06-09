@@ -9,7 +9,7 @@ export class CreatePhotoDto {
   @IsString()
   caption?: string;
 
-  @IsString()
+  @IsString() // ✅ بدلاً من IsInt
   @IsNotEmpty()
   place: string;
 }

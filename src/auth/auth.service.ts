@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 
 import { UsersService } from '../users/users.service';
-import { User, UserDocument } from '../users/schemas/user.schema';
+import { User } from '../users/entities/user.entity';
 import { RegisterDto } from './dtos/register.dto';
 
 @Injectable()
@@ -14,19 +14,16 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(
-    email: string,
-    password: string,
-  ): Promise<UserDocument | null> {
+  async validateUser(email: string, password: string): Promise<User | null> {
     const user = await this.usersService.findByEmail(email);
-    if (user && (await bcrypt.compare(password, user.password))) {
-      return user; // هذا بالفعل UserDocument
+    if (user && (await bcrypt.compare(password, user.passwordHash))) {
+      return user;
     }
     return null;
   }
 
-  async login(user: UserDocument) {
-    const payload = { sub: user._id, role: user.role };
+  async login(user: User) {
+    const payload = { sub: user.id, role: user.role?.role || 'user' };
     return {
       access_token: this.jwtService.sign(payload),
     };
@@ -35,13 +32,14 @@ export class AuthService {
   async register(dto: RegisterDto) {
     const hashedPassword = await bcrypt.hash(dto.password, 10);
     const createdUser = await this.usersService.create({
-      ...dto,
-      password: hashedPassword,
+      email: dto.email,
+      username: dto.username,
+      passwordHash: hashedPassword,
     });
     return this.login(createdUser);
   }
 
-  async getProfile(userId: string) {
+  async getProfile(userId: number) {
     return this.usersService.findOne(userId);
   }
 }

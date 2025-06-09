@@ -3,14 +3,12 @@ import {
   IsNotEmpty,
   IsUrl,
   IsPhoneNumber,
-  IsMongoId,
-  IsArray,
+  IsUUID,
+  IsInt,
+  IsOptional,
 } from 'class-validator';
-import { Expose, Type } from 'class-transformer';
-export class CreatePlaceDto {
-  @Expose()
-  id: string;
 
+export class CreatePlaceDto {
   @IsString()
   @IsNotEmpty()
   name: string;
@@ -18,19 +16,17 @@ export class CreatePlaceDto {
   @IsString()
   description: string;
 
+  @IsOptional()
   @IsUrl()
-  websiteUrl: string;
+  websiteUrl?: string;
 
+  @IsOptional()
   @IsPhoneNumber()
-  phoneNumber: string;
+  phoneNumber?: string;
 
-  @IsMongoId()
-  category: string;
+  @IsInt()
+  category: number; // should be number, because category.id is number
 
-  @IsMongoId()
-  address: string;
-
-  @IsArray()
-  @IsUrl({}, { each: true })
-  photos: string[];
+  @IsUUID()
+  address: string; // UUID because address.id is string (uuid in DB)
 }

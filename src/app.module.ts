@@ -10,6 +10,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { Area } from './area/entities/area.entity';
 import { AreasModule } from './area/area.module';
 import { GeonamesModule } from './geonames/geonames.module';
+import { MapModule } from './map/map.module';
 // import { GeoModule } from './geo/geo.module'; // وحدة للقاعدة الجغرافية
 
 @Module({
@@ -51,6 +52,7 @@ import { GeonamesModule } from './geonames/geonames.module';
     UsersModule,
     AreasModule,
     GeonamesModule,
+    MapModule,
   ],
 })
 export class AppModule {}

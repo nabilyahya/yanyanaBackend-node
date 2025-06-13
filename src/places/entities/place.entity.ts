@@ -57,6 +57,9 @@ export class Place {
   // @OneToMany(() => Report, (report) => report.place)
   // reports: Report[];
 
+  @Column({ nullable: true })
+  googlePlaceId: string;
+
   @Column({ default: false })
   approved: boolean;
 

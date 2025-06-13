@@ -30,6 +30,6 @@ export class Area {
   @Column('decimal', { precision: 10, scale: 7 })
   latitude: number;
 
-  // @OneToMany(() => PlaceAddress, (placeAddress) => placeAddress.area)
-  // placeAddresses: PlaceAddress[];
+  @OneToMany(() => PlaceAddress, (placeAddress) => placeAddress.area)
+  placeAddresses: PlaceAddress[];
 }

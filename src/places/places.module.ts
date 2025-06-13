@@ -22,7 +22,7 @@ import { ShopApprovalRequest } from 'src/users/entities/shopApprovalRequest.enti
       Review,
       ShopApprovalRequest,
     ]), // هؤلاء من التطبيق
-    TypeOrmModule.forFeature([Area], 'geo'), // هذا من قاعدة البيانات الجغرافية
+    TypeOrmModule.forFeature([Area]), // هذا من قاعدة البيانات الجغرافية
     HttpModule,
   ],
   controllers: [PlacesController],

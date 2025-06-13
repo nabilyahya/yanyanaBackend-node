@@ -29,28 +29,27 @@ import { MapModule } from './map/map.module';
     }),
 
     // الاتصال بقاعدة البيانات الجغرافية
-    TypeOrmModule.forRoot({
-      name: 'geo',
-      type: 'postgres',
-      host: process.env.GEO_DB_HOST,
-      port: parseInt(process.env.GEO_DB_PORT || '5432', 10),
-      username: process.env.GEO_DB_USERNAME,
-      password: process.env.GEO_DB_PASSWORD,
-      database: process.env.GEO_DB_NAME,
-      autoLoadEntities: true,
-      synchronize: true,
-    }),
+    // TypeOrmModule.forRoot({
+    //   name: 'geo',
+    //   type: 'postgres',
+    //   host: process.env.GEO_DB_HOST,
+    //   port: parseInt(process.env.GEO_DB_PORT || '5432', 10),
+    //   username: process.env.GEO_DB_USERNAME,
+    //   password: process.env.GEO_DB_PASSWORD,
+    //   database: process.env.GEO_DB_NAME,
+    //   autoLoadEntities: true,
+    //   synchronize: true,
+    // }),
 
     UsersModule,
+    AreasModule,
+    MapModule,
     PlacesModule,
     GeoModule,
     PhotosModule,
     CategoriesModule,
     ReviewsModule,
-    UsersModule,
-    AreasModule,
     GeonamesModule,
-    MapModule,
   ],
 })
 export class AppModule {}

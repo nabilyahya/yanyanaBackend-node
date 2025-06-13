@@ -17,8 +17,9 @@ export class PlacesService {
     @InjectRepository(Place)
     private placeRepo: Repository<Place>,
 
-    @InjectRepository(Area, 'geo')
+    @InjectRepository(Area)
     private areaRepo: Repository<Area>,
+
     @InjectRepository(Category)
     private categoryRepo: Repository<Category>,
 

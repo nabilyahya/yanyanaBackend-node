@@ -5,7 +5,7 @@ import { GeoService } from './geo.service';
 import { GeoController } from './geo.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Area], 'geo')],
+  imports: [TypeOrmModule.forFeature([Area])],
   providers: [GeoService],
   controllers: [GeoController],
 })

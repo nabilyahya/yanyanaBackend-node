@@ -13,8 +13,9 @@ export class PlaceAddress {
   @PrimaryGeneratedColumn()
   id: number;
 
-  // @ManyToOne(() => Area, (area) => area.placeAddresses)
-  // area: Area;
+  @ManyToOne(() => Area)
+  @JoinColumn({ name: 'areaId' })
+  area: Area;
 
   @OneToOne(() => Place, (place) => place.address)
   place: Place;

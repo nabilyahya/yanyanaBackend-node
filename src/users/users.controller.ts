@@ -6,11 +6,14 @@ import {
   Param,
   Patch,
   Delete,
+  Req,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { UpdateUserDto } from './dtos/update-user.dto';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { UpdateUserAddressDto } from './dtos/UpdateUserAddressDto';
+import { RequestWithUser } from 'src/common/types/request-with-user';
 
 @Controller('users')
 export class UsersController {
@@ -41,5 +44,12 @@ export class UsersController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.usersService.remove(+id); // ✅ تحويل id إلى رقم
+  }
+  @Post('address')
+  updateAddress(
+    @Body() dto: UpdateUserAddressDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.usersService.updateAddress(req.user.id, dto);
   }
 }

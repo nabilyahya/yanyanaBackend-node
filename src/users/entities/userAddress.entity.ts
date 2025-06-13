@@ -22,10 +22,19 @@ export class UserAddress {
   street: string;
 
   @Column({ nullable: true })
+  country: string;
+
+  @Column({ nullable: true })
   addressDetails: string;
 
   @Column({ nullable: true })
   postalCode: string;
+
+  @Column({ type: 'float', nullable: true })
+  latitude: number;
+
+  @Column({ type: 'float', nullable: true })
+  longitude: number;
 
   @OneToOne(() => User, (user) => user.address)
   @JoinColumn()

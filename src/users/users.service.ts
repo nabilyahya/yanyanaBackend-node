@@ -6,12 +6,16 @@ import { CreateUserDto } from './dtos/create-user.dto';
 import { UpdateUserDto } from './dtos/update-user.dto';
 import { RegisterDto } from 'src/auth/dtos/register.dto';
 import { UserRole } from './entities/userRole.entity';
+import { UpdateUserAddressDto } from './dtos/UpdateUserAddressDto';
+import { UserAddress } from './entities/userAddress.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(UserAddress)
+    private readonly userAddressRepo: Repository<UserAddress>,
   ) {}
 
   async findAll(): Promise<User[]> {
@@ -54,5 +58,22 @@ export class UsersService {
   async remove(id: number): Promise<User> {
     const user = await this.findOne(id);
     return this.userRepo.remove(user);
+  }
+  async updateAddress(userId: number, dto: UpdateUserAddressDto) {
+    let address = await this.userAddressRepo.findOne({
+      where: { user: { id: +userId } },
+      relations: ['user'],
+    });
+
+    if (!address) {
+      address = this.userAddressRepo.create({
+        ...dto,
+        user: { id: +userId },
+      });
+    } else {
+      Object.assign(address, dto);
+    }
+
+    return this.userAddressRepo.save(address);
   }
 }

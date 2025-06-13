@@ -11,18 +11,16 @@ import { Area } from './area/entities/area.entity';
 import { AreasModule } from './area/area.module';
 import { GeonamesModule } from './geonames/geonames.module';
 import { MapModule } from './map/map.module';
-// import { GeoModule } from './geo/geo.module'; // وحدة للقاعدة الجغرافية
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
 
-    // الاتصال بقاعدة بيانات التطبيق الرئيسية
     TypeOrmModule.forRoot({
       name: 'default', // هذا هو الاتصال الرئيسي
       type: 'postgres',
       host: process.env.APP_DB_HOST,
-      port: parseInt(process.env.DB_PORT || '5432', 10),
+      port: parseInt(process.env.APP_DB_PORT || '5432', 10),
       username: process.env.APP_DB_USERNAME,
       password: process.env.APP_DB_PASSWORD,
       database: process.env.APP_DB_NAME,
@@ -32,10 +30,10 @@ import { MapModule } from './map/map.module';
 
     // الاتصال بقاعدة البيانات الجغرافية
     TypeOrmModule.forRoot({
-      name: 'geo', // اسم مخصص للاتصال الجغرافي
+      name: 'geo',
       type: 'postgres',
       host: process.env.GEO_DB_HOST,
-      port: parseInt(process.env.DB_PORT || '5432', 10),
+      port: parseInt(process.env.GEO_DB_PORT || '5432', 10),
       username: process.env.GEO_DB_USERNAME,
       password: process.env.GEO_DB_PASSWORD,
       database: process.env.GEO_DB_NAME,

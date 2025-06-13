@@ -33,7 +33,12 @@ export class MapController {
     @Query('type') types: string | string[],
     @Req() req: RequestWithUser,
   ) {
-    const typeList = Array.isArray(types) ? types : [types ?? 'restaurant'];
+    const typeList = Array.isArray(types)
+      ? types
+      : (types ?? 'restaurant')
+          .split(',')
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0);
 
     const allowedTypes = [
       'restaurant',

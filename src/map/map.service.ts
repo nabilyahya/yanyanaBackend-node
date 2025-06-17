@@ -9,8 +9,11 @@ import { PlaceAddress } from 'src/area/entities/place-address.entity';
 import { SearchPoint } from 'src/area/entities/search-point.entity';
 import { Photo } from 'src/photos/entities/photo.schema';
 import { Place } from 'src/places/entities/place.entity';
-import { Repository } from 'typeorm';
-
+import { In, Repository } from 'typeorm';
+import * as fs from 'fs';
+import * as path from 'path';
+import { lastValueFrom } from 'rxjs';
+import { arraysEqual } from 'src/helper/arraysEqual';
 @Injectable()
 export class MapService {
   private readonly apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -39,20 +42,60 @@ export class MapService {
     const roundedLat = Math.round(lat * 1000) / 1000;
     const roundedLng = Math.round(lng * 1000) / 1000;
 
-    const existingPoint = await this.searchPointRepo.findOne({
-      where: { latitude: roundedLat, longitude: roundedLng },
-      relations: ['places'],
+    const existingPoints = await this.searchPointRepo.find({
+      where: {
+        latitude: roundedLat,
+        longitude: roundedLng,
+      },
+      relations: ['places', 'places.photos'],
     });
+
+    const existingPoint = existingPoints.find((point) =>
+      arraysEqual([...point.types].sort(), [...types].sort()),
+    );
 
     if (
       existingPoint &&
       existingPoint.places.length > 0 &&
       new Date().getTime() - new Date(existingPoint.searchedAt).getTime() <
-        183 * 24 * 60 * 60 * 1000 // 6 months
+        183 * 24 * 60 * 60 * 1000
     ) {
       console.log('Existe');
+
+      // تحقق من الصور المفقودة على القرص
+      for (const place of existingPoint.places) {
+        for (let i = 0; i < place.photos.length; i++) {
+          const photo = place.photos[i];
+          const fullPath = path.join(
+            __dirname,
+            '..',
+            '..',
+            'public',
+            photo.url,
+          );
+
+          if (!fs.existsSync(fullPath)) {
+            // إذا الملف مفقود فقط، نعيد تحميله من Google
+            const photoRefMatch = photo.url.match(/photo_(\d+)\.jpg$/);
+            const index = photoRefMatch ? parseInt(photoRefMatch[1]) : i;
+
+            const details = await this.getPlaceDetails(place.googlePlaceId);
+            const photoRef = details.photos?.[index]?.photo_reference;
+            if (photoRef) {
+              const googlePhotoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1080&photo_reference=${photoRef}&key=${this.apiKey}`;
+              await this.downloadAndSaveImage(
+                googlePhotoUrl,
+                place.id.toString(),
+                index,
+              );
+            }
+          }
+        }
+      }
+
       return existingPoint.places;
     }
+
     console.log('Call google');
     const results = await Promise.all(
       types.map((type) =>
@@ -79,6 +122,7 @@ export class MapService {
     for (const item of unique) {
       const exists = await this.placeRepo.findOne({
         where: { googlePlaceId: item.place_id },
+        relations: ['photos'],
       });
 
       if (!exists) {
@@ -107,27 +151,109 @@ export class MapService {
         });
 
         if (item.photos) {
-          for (const photo of item.photos) {
-            const photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1080&photo_reference=${photo.photo_reference}&key=${this.apiKey}`;
-            await this.photoRepo.save({
-              placeId: newPlace.id,
-              url: photoUrl,
-              uploadedAt: new Date(),
+          for (let i = 0; i < item.photos.length; i++) {
+            const photo = item.photos[i];
+            const googlePhotoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1080&photo_reference=${photo.photo_reference}&key=${this.apiKey}`;
+            const localRelativePath = `/uploads/places/${newPlace.id}/photo_${i}.jpg`;
+            const fullLocalPath = path.join(
+              __dirname,
+              '..',
+              '..',
+              'public',
+              localRelativePath,
+            );
+
+            const existingPhoto = await this.photoRepo.findOne({
+              where: {
+                place: { id: newPlace.id },
+                url: localRelativePath,
+              },
             });
+
+            const fileExists = fs.existsSync(fullLocalPath);
+
+            if (!existingPhoto && !fileExists) {
+              await this.downloadAndSaveImage(
+                googlePhotoUrl,
+                newPlace.id.toString(),
+                i,
+              );
+              await this.photoRepo.save({
+                place: { id: newPlace.id },
+                url: localRelativePath,
+                uploadedAt: new Date(),
+              });
+            } else if (!fileExists && existingPhoto) {
+              await this.downloadAndSaveImage(
+                googlePhotoUrl,
+                newPlace.id.toString(),
+                i,
+              );
+            }
           }
         }
 
-        response.push(newPlace);
+        const savedPlaceWithPhotos = await this.placeRepo.findOne({
+          where: { id: newPlace.id },
+          relations: ['photos'],
+        });
+
+        if (savedPlaceWithPhotos) {
+          response.push(savedPlaceWithPhotos);
+        }
       } else {
-        response.push(exists);
+        // تحقق من الصور أيضًا إذا كان المكان موجودًا
+        if (item.photos) {
+          for (let i = 0; i < item.photos.length; i++) {
+            const photo = item.photos[i];
+            const localRelativePath = `/uploads/places/${exists.id}/photo_${i}.jpg`;
+            const fullLocalPath = path.join(
+              __dirname,
+              '..',
+              '..',
+              'public',
+              localRelativePath,
+            );
+
+            const existingPhoto = await this.photoRepo.findOne({
+              where: {
+                place: { id: exists.id },
+                url: localRelativePath,
+              },
+            });
+
+            const fileExists = fs.existsSync(fullLocalPath);
+
+            if (!fileExists && existingPhoto) {
+              const googlePhotoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1080&photo_reference=${photo.photo_reference}&key=${this.apiKey}`;
+              await this.downloadAndSaveImage(
+                googlePhotoUrl,
+                exists.id.toString(),
+                i,
+              );
+            }
+          }
+        }
+
+        const updatedPlace = await this.placeRepo.findOne({
+          where: { id: exists.id },
+          relations: ['photos'],
+        });
+
+        if (updatedPlace) {
+          response.push(updatedPlace);
+        }
       }
     }
+
     await this.searchPointRepo.save({
       latitude: roundedLat,
       longitude: roundedLng,
       searchedAt: new Date(),
+      types,
       places: response,
     });
+
     return response;
   }
 
@@ -191,5 +317,42 @@ export class MapService {
     );
 
     return response.data.results;
+  }
+  async downloadAndSaveImage(
+    url: string,
+    placeId: string,
+    index: number,
+  ): Promise<string> {
+    const folderPath = path.join(
+      __dirname,
+      '..',
+      '..',
+      'public',
+      'uploads',
+      'places',
+      placeId,
+    );
+
+    if (!fs.existsSync(folderPath)) {
+      fs.mkdirSync(folderPath, { recursive: true });
+    }
+
+    const filename = `photo_${index}.jpg`;
+    const filepath = path.join(folderPath, filename);
+    const relativePath = `/uploads/places/${placeId}/${filename}`;
+
+    // ✅ إذا الملف موجود بالفعل، أرجع نفس المسار
+    if (fs.existsSync(filepath)) {
+      return relativePath;
+    }
+
+    // ✅ إذا لم يكن موجود، نزله من Google واكتبه في الملف
+    const response = await firstValueFrom(
+      this.httpService.get(url, { responseType: 'arraybuffer' }),
+    );
+
+    fs.writeFileSync(filepath, response.data);
+
+    return relativePath;
   }
 }

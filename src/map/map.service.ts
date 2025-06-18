@@ -1,6 +1,6 @@
 // src/map/map.service.ts
 import { HttpService } from '@nestjs/axios';
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { log } from 'console';
 import { firstValueFrom } from 'rxjs';
@@ -14,6 +14,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { lastValueFrom } from 'rxjs';
 import { arraysEqual } from 'src/helper/arraysEqual';
+import axios from 'axios';
+
 @Injectable()
 export class MapService {
   private readonly apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -487,5 +489,57 @@ export class MapService {
     fs.writeFileSync(filepath, response.data);
 
     return relativePath;
+  }
+  async fetchSwimmableBeaches(lat: number, lng: number): Promise<any[]> {
+    const radius = 45000;
+
+    const query = `
+      [out:json][timeout:25];
+      (
+        node["natural"="beach"](around:${radius},${lat},${lng});
+        way["natural"="beach"](around:${radius},${lat},${lng});
+        relation["natural"="beach"](around:${radius},${lat},${lng});
+
+        node["tourism"="beach_resort"](around:${radius},${lat},${lng});
+        way["tourism"="beach_resort"](around:${radius},${lat},${lng});
+        relation["tourism"="beach_resort"](around:${radius},${lat},${lng});
+
+        node["leisure"="beach_resort"](around:${radius},${lat},${lng});
+        way["leisure"="beach_resort"](around:${radius},${lat},${lng});
+        relation["leisure"="beach_resort"](around:${radius},${lat},${lng});
+      );
+      out center tags;
+    `;
+
+    try {
+      const res = await axios.post(
+        'https://overpass-api.de/api/interpreter',
+        query,
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        },
+      );
+
+      const elements = res.data.elements;
+
+      return elements
+        .filter((element: any) => element.tags?.name)
+        .map((element: any) => {
+          const tags = element.tags || {};
+          return {
+            name: tags.name,
+            description: tags.description || null,
+            operator: tags.operator || null,
+            free: tags.fee === 'no' ? true : tags.fee === 'yes' ? false : null,
+            lat: element.lat || element.center?.lat,
+            lon: element.lon || element.center?.lon,
+          };
+        });
+    } catch (error) {
+      console.error('Overpass API Error:', error);
+      throw new InternalServerErrorException('Failed to fetch beach data');
+    }
   }
 }

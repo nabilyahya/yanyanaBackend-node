@@ -36,6 +36,9 @@ export class Place {
   @Column({ nullable: true })
   phoneNumber: string;
 
+  @Column({ type: 'boolean', nullable: true })
+  isOpenNow: boolean;
+
   @ManyToOne(() => Category, (category) => category.places, { eager: true })
   category: Category;
 

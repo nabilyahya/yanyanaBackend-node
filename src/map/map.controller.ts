@@ -102,4 +102,10 @@ export class MapController {
   ) {
     return this.mapService.searchPlaceByName(query, lat, lng);
   }
+
+  // OSM
+  @Get('swimmable-beaches')
+  getSwimmableBeaches(@Query('lat') lat: number, @Query('lng') lng: number) {
+    return this.mapService.fetchSwimmableBeaches(lat, lng);
+  }
 }

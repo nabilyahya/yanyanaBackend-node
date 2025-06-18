@@ -283,6 +283,7 @@ export class MapService {
     return area;
   }
   async getPlaceDetails(placeId: string) {
+    console.log(placeId, 'placeId');
     const response = await firstValueFrom(
       this.httpService.get(
         'https://maps.googleapis.com/maps/api/place/details/json',
@@ -299,6 +300,138 @@ export class MapService {
 
     return response.data.result;
   }
+  async getPlaceDetailsFull(googlePlaceId: string): Promise<any> {
+    // 🧠 جلب التفاصيل من Google دائمًا
+    const details = await this.getPlaceDetails(googlePlaceId);
+
+    // 🔎 البحث عن المكان في قاعدة البيانات
+    let place = await this.placeRepo.findOne({
+      where: { googlePlaceId },
+      relations: ['photos'],
+    });
+
+    if (place) {
+      // ✅ تأكد من تحميل وتخزين الصور
+      if (details.photos) {
+        for (let i = 0; i < details.photos.length; i++) {
+          const photoRef = details.photos[i].photo_reference;
+          const filename = `photo_${i}.jpg`;
+          const localPath = `/uploads/places/${place.id}/${filename}`;
+          const fullPath = path.join(
+            __dirname,
+            '..',
+            '..',
+            'public',
+            localPath,
+          );
+
+          // تنزيل الصورة إذا كانت مفقودة على القرص
+          if (!fs.existsSync(fullPath)) {
+            const googlePhotoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1080&photo_reference=${photoRef}&key=${this.apiKey}`;
+            await this.downloadAndSaveImage(
+              googlePhotoUrl,
+              place.id.toString(),
+              i,
+            );
+          }
+
+          // تخزين الصورة في قاعدة البيانات إذا غير موجودة
+          const existingPhoto = await this.photoRepo.findOne({
+            where: {
+              place: { id: place.id },
+              url: localPath,
+            },
+          });
+
+          if (!existingPhoto) {
+            await this.photoRepo.save({
+              place: { id: place.id },
+              url: localPath,
+              uploadedAt: new Date(),
+            });
+          }
+        }
+      }
+
+      const photos = await this.photoRepo.find({
+        where: { place: { id: place.id } },
+      });
+
+      return {
+        ...place,
+        photos: photos.map((p) => ({ url: p.url })),
+        formatted_phone_number: details.formatted_phone_number,
+        website: details.website,
+        reviews: details.reviews,
+        opening_hours: details.opening_hours,
+        location: details.geometry?.location,
+        business_status: details.business_status,
+        types: details.types,
+        price_level: details.price_level,
+        user_ratings_total: details.user_ratings_total,
+        vicinity: details.vicinity,
+        plus_code: details.plus_code,
+        icon: details.icon,
+      };
+    }
+
+    // 🆕 إنشاء مكان جديد
+    const newPlace = await this.placeRepo.save({
+      name: details.name,
+      description: 'No description provided',
+      googlePlaceId: googlePlaceId,
+      rate: details.rating || 0,
+      totalRatings: details.user_ratings_total || 0,
+      isOpenNow: details.opening_hours?.open_now ?? null,
+      createdAt: new Date(),
+    });
+
+    // ✅ تحميل وتخزين الصور الجديدة
+    if (details.photos) {
+      for (let i = 0; i < details.photos.length; i++) {
+        const photoRef = details.photos[i].photo_reference;
+        const googlePhotoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=1080&photo_reference=${photoRef}&key=${this.apiKey}`;
+        const localPath = await this.downloadAndSaveImage(
+          googlePhotoUrl,
+          newPlace.id.toString(),
+          i,
+        );
+
+        await this.photoRepo.save({
+          place: { id: newPlace.id },
+          url: localPath,
+          uploadedAt: new Date(),
+        });
+      }
+    }
+
+    const placeWithPhotos = await this.placeRepo.findOne({
+      where: { id: newPlace.id },
+      relations: ['photos'],
+    });
+
+    if (!placeWithPhotos) {
+      throw new Error('Place saved but not found afterward.');
+    }
+
+    return {
+      ...placeWithPhotos,
+      photos: placeWithPhotos.photos.map((p) => ({ url: p.url })),
+      formatted_phone_number: details.formatted_phone_number,
+      website: details.website,
+      reviews: details.reviews,
+      opening_hours: details.opening_hours,
+      location: details.geometry?.location,
+      business_status: details.business_status,
+      types: details.types,
+      price_level: details.price_level,
+      user_ratings_total: details.user_ratings_total,
+      vicinity: details.vicinity,
+      plus_code: details.plus_code,
+      icon: details.icon,
+    };
+  }
+
   async searchPlaceByName(query: string, lat: number, lng: number) {
     const location = `${lat},${lng}`;
 

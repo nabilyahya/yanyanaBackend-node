@@ -88,7 +88,7 @@ export class MapController {
   @Get('place-details')
   @ApiQuery({ name: 'placeId', type: String, required: true })
   async getPlaceDetails(@Query('placeId') placeId: string) {
-    return this.mapService.getPlaceDetails(placeId);
+    return this.mapService.getPlaceDetailsFull(placeId);
   }
 
   @Get('search-by-name')

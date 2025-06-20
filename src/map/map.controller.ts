@@ -2,6 +2,7 @@ import { Controller, Get, Query, Req } from '@nestjs/common';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { MapService } from './map.service';
 import { RequestWithUser } from 'src/common/types/request-with-user';
+import { NaturalType } from 'src/common/enums/natural-type.enum';
 
 @ApiTags('Map')
 @Controller('map')
@@ -107,5 +108,17 @@ export class MapController {
   @Get('swimmable-beaches')
   getSwimmableBeaches(@Query('lat') lat: number, @Query('lng') lng: number) {
     return this.mapService.fetchSwimmableBeaches(lat, lng);
+  }
+
+  @Get('natural')
+  @ApiQuery({ name: 'lat', required: true, type: Number })
+  @ApiQuery({ name: 'lng', required: true, type: Number })
+  @ApiQuery({ name: 'type', enum: NaturalType, required: true })
+  getNaturalPlaces(
+    @Query('lat') lat: number,
+    @Query('lng') lng: number,
+    @Query('type') type: NaturalType,
+  ) {
+    return this.mapService.fetchNaturalPlaces(lat, lng, type);
   }
 }

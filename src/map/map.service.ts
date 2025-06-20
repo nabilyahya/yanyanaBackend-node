@@ -15,6 +15,7 @@ import * as path from 'path';
 import { lastValueFrom } from 'rxjs';
 import { arraysEqual } from 'src/helper/arraysEqual';
 import axios from 'axios';
+import { NaturalType } from 'src/common/enums/natural-type.enum';
 
 @Injectable()
 export class MapService {
@@ -540,6 +541,129 @@ export class MapService {
     } catch (error) {
       console.error('Overpass API Error:', error);
       throw new InternalServerErrorException('Failed to fetch beach data');
+    }
+  }
+
+  async fetchNaturalPlaces(
+    lat: number,
+    lng: number,
+    type: NaturalType,
+  ): Promise<any[]> {
+    console.log(lat, 'lat');
+    console.log(lng, 'lng');
+    console.log(type, 'type');
+    const radius = 60000;
+    let queryBody = '';
+
+    switch (type) {
+      case 'beach':
+        queryBody = `
+        node["natural"="beach"](around:${radius},${lat},${lng});
+        way["natural"="beach"](around:${radius},${lat},${lng});
+        relation["natural"="beach"](around:${radius},${lat},${lng});
+
+        node["tourism"="beach_resort"](around:${radius},${lat},${lng});
+        way["tourism"="beach_resort"](around:${radius},${lat},${lng});
+        relation["tourism"="beach_resort"](around:${radius},${lat},${lng});
+
+        node["leisure"="beach_resort"](around:${radius},${lat},${lng});
+        way["leisure"="beach_resort"](around:${radius},${lat},${lng});
+        relation["leisure"="beach_resort"](around:${radius},${lat},${lng});
+      `;
+        break;
+
+      case 'forest':
+        queryBody = `
+        node["natural"="wood"](around:${radius},${lat},${lng});
+        way["natural"="wood"](around:${radius},${lat},${lng});
+        relation["natural"="wood"](around:${radius},${lat},${lng});
+
+        node["landuse"="forest"](around:${radius},${lat},${lng});
+        way["landuse"="forest"](around:${radius},${lat},${lng});
+        relation["landuse"="forest"](around:${radius},${lat},${lng});
+
+        node["leisure"="park"](around:${radius},${lat},${lng});
+        way["leisure"="park"](around:${radius},${lat},${lng});
+        relation["leisure"="park"](around:${radius},${lat},${lng});
+
+        node["boundary"="national_park"](around:${radius},${lat},${lng});
+        way["boundary"="national_park"](around:${radius},${lat},${lng});
+        relation["boundary"="national_park"](around:${radius},${lat},${lng});
+      `;
+        break;
+
+      case 'lake':
+        queryBody = `
+        node["natural"="water"]["water"="lake"](around:${radius},${lat},${lng});
+        way["natural"="water"]["water"="lake"](around:${radius},${lat},${lng});
+        relation["natural"="water"]["water"="lake"](around:${radius},${lat},${lng});
+      `;
+        break;
+
+      case 'river':
+        queryBody = `
+        node["waterway"="river"](around:${radius},${lat},${lng});
+        way["waterway"="river"](around:${radius},${lat},${lng});
+        relation["waterway"="river"](around:${radius},${lat},${lng});
+      `;
+        break;
+
+      case 'waterfall':
+        queryBody = `
+        node["natural"="waterfall"](around:${radius},${lat},${lng});
+        way["natural"="waterfall"](around:${radius},${lat},${lng});
+        relation["natural"="waterfall"](around:${radius},${lat},${lng});
+      `;
+        break;
+
+      case 'mountain':
+        queryBody = `
+        node["natural"="peak"](around:${radius},${lat},${lng});
+        way["natural"="peak"](around:${radius},${lat},${lng});
+        relation["natural"="peak"](around:${radius},${lat},${lng});
+      `;
+        break;
+
+      case 'plateau':
+        queryBody = `
+        node["natural"="plateau"](around:${radius},${lat},${lng});
+        way["natural"="plateau"](around:${radius},${lat},${lng});
+        relation["natural"="plateau"](around:${radius},${lat},${lng});
+      `;
+        break;
+
+      default:
+        throw new Error('Unsupported type');
+    }
+
+    const query = `[out:json][timeout:25];(${queryBody});out center tags;`;
+
+    try {
+      const res = await axios.post(
+        'https://overpass-api.de/api/interpreter',
+        new URLSearchParams({ data: query }).toString(),
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        },
+      );
+
+      return res.data.elements
+        .filter((el: any) => el.tags?.name)
+        .map((el: any) => {
+          const tags = el.tags || {};
+          return {
+            name: tags.name,
+            description: tags.description || null,
+            type: type,
+            lat: el.lat || el.center?.lat,
+            lon: el.lon || el.center?.lon,
+          };
+        });
+    } catch (error) {
+      console.error('Overpass API Error:', error);
+      throw new InternalServerErrorException('Failed to fetch data');
     }
   }
 }

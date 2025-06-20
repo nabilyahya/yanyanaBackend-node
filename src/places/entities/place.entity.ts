@@ -48,6 +48,9 @@ export class Place {
   @JoinColumn()
   address: PlaceAddress;
 
+  @Column('text', { array: true, nullable: true })
+  types: string[];
+
   @OneToMany(() => Photo, (photo) => photo.place)
   photos: Photo[];
 

@@ -45,6 +45,11 @@ export class MapService {
     const roundedLat = Math.round(lat * 1000) / 1000;
     const roundedLng = Math.round(lng * 1000) / 1000;
 
+    const isValidTypes = (t: any[] | null | undefined) =>
+      Array.isArray(t) &&
+      t.length > 0 &&
+      t.every((v) => typeof v === 'string' && v.trim() !== '');
+
     const existingPoints = await this.searchPointRepo.find({
       where: {
         latitude: roundedLat,
@@ -53,19 +58,23 @@ export class MapService {
       relations: ['places', 'places.photos'],
     });
 
-    const existingPoint = existingPoints.find((point) =>
+    const validPoints = existingPoints.filter((point) =>
+      isValidTypes(point.types),
+    );
+
+    const existingPoint = validPoints.find((point) =>
       arraysEqual([...point.types].sort(), [...types].sort()),
     );
 
-    if (
+    const isCachedValid =
       existingPoint &&
       existingPoint.places.length > 0 &&
       new Date().getTime() - new Date(existingPoint.searchedAt).getTime() <
-        183 * 24 * 60 * 60 * 1000
-    ) {
-      console.log('Existe');
+        183 * 24 * 60 * 60 * 1000;
 
-      // تحقق من الصور المفقودة على القرص
+    if (isCachedValid) {
+      console.log('✔ Cache hit (existing data used)');
+
       for (const place of existingPoint.places) {
         for (let i = 0; i < place.photos.length; i++) {
           const photo = place.photos[i];
@@ -78,7 +87,6 @@ export class MapService {
           );
 
           if (!fs.existsSync(fullPath)) {
-            // إذا الملف مفقود فقط، نعيد تحميله من Google
             const photoRefMatch = photo.url.match(/photo_(\d+)\.jpg$/);
             const index = photoRefMatch ? parseInt(photoRefMatch[1]) : i;
 
@@ -99,7 +107,7 @@ export class MapService {
       return existingPoint.places;
     }
 
-    console.log('Call google');
+    console.log('🌐 Call Google API');
     const results = await Promise.all(
       types.map((type) =>
         firstValueFrom(
@@ -146,6 +154,7 @@ export class MapService {
           totalRatings: item.user_ratings_total || 0,
           isOpenNow: item.opening_hours?.open_now ?? null,
           createdAt: new Date(),
+          types: item.types || [],
         });
 
         await this.placeAddressRepo.save({
@@ -201,11 +210,8 @@ export class MapService {
           relations: ['photos'],
         });
 
-        if (savedPlaceWithPhotos) {
-          response.push(savedPlaceWithPhotos);
-        }
+        if (savedPlaceWithPhotos) response.push(savedPlaceWithPhotos);
       } else {
-        // تحقق من الصور أيضًا إذا كان المكان موجودًا
         if (item.photos) {
           for (let i = 0; i < item.photos.length; i++) {
             const photo = item.photos[i];
@@ -243,9 +249,7 @@ export class MapService {
           relations: ['photos'],
         });
 
-        if (updatedPlace) {
-          response.push(updatedPlace);
-        }
+        if (updatedPlace) response.push(updatedPlace);
       }
     }
 

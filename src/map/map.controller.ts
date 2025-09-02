@@ -1,5 +1,5 @@
 import { Controller, Get, Query, Req } from '@nestjs/common';
-import { ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { MapService } from './map.service';
 import { RequestWithUser } from 'src/common/types/request-with-user';
 import { NaturalType } from 'src/common/enums/natural-type.enum';
@@ -9,7 +9,6 @@ import { NaturalType } from 'src/common/enums/natural-type.enum';
 export class MapController {
   constructor(private readonly mapService: MapService) {}
 
-  @Get('places')
   @Get('places')
   @ApiQuery({ name: 'lat', type: Number, required: false })
   @ApiQuery({ name: 'lng', type: Number, required: false })
@@ -106,11 +105,13 @@ export class MapController {
 
   // OSM
   @Get('swimmable-beaches')
+  @ApiOperation({ summary: 'Find swimmable beaches via OSM/Overpass' })
   getSwimmableBeaches(@Query('lat') lat: number, @Query('lng') lng: number) {
     return this.mapService.fetchSwimmableBeaches(lat, lng);
   }
 
   @Get('natural')
+  @ApiOperation({ summary: 'Get natural places (beach, forest, lake, ...)' })
   @ApiQuery({ name: 'lat', required: true, type: Number })
   @ApiQuery({ name: 'lng', required: true, type: Number })
   @ApiQuery({ name: 'type', enum: NaturalType, required: true })

@@ -36,6 +36,9 @@ export class Place {
   @Column({ nullable: true })
   phoneNumber: string;
 
+  @Column({ type: 'boolean', nullable: true })
+  isOpenNow: boolean;
+
   @ManyToOne(() => Category, (category) => category.places, { eager: true })
   category: Category;
 
@@ -44,6 +47,9 @@ export class Place {
   })
   @JoinColumn()
   address: PlaceAddress;
+
+  @Column('text', { array: true, nullable: true })
+  types: string[];
 
   @OneToMany(() => Photo, (photo) => photo.place)
   photos: Photo[];

@@ -1,9 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-
+import * as express from 'express';
+import * as path from 'path';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(
+    '/uploads',
+    express.static(path.join(__dirname, '..', 'public', 'uploads')),
+  );
 
   // إعداد معلومات Swagger
   const config = new DocumentBuilder()

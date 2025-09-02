@@ -17,6 +17,9 @@ export class SearchPoint {
   @Column({ type: 'float' })
   latitude: number;
 
+  @Column('simple-array', { nullable: true })
+  types: string[];
+
   @Column({ type: 'float' })
   longitude: number;
 

@@ -2,7 +2,8 @@
 /dist
 /node_modules
 /build
-
+/public/uploads
+/public
 # Logs
 logs
 *.log

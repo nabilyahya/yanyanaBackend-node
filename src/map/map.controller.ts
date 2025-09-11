@@ -3,6 +3,7 @@ import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { MapService } from './map.service';
 import { RequestWithUser } from 'src/common/types/request-with-user';
 import { NaturalType } from 'src/common/enums/natural-type.enum';
+import { ExploreDto } from './dto/explore';
 
 @ApiTags('Map')
 @Controller('map')
@@ -121,5 +122,10 @@ export class MapController {
     @Query('type') type: NaturalType,
   ) {
     return this.mapService.fetchNaturalPlaces(lat, lng, type);
+  }
+  @Get('explore-by-mood')
+  @ApiOperation({ summary: 'Get places based on the mood' })
+  async explore(@Query() q: ExploreDto) {
+    return this.mapService.exploreByMood(q);
   }
 }

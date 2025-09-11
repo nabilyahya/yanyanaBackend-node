@@ -22,6 +22,9 @@ import * as dns from 'dns';
 import * as https from 'https';
 const streamPipeline = promisify(pipeline);
 import pLimit from 'p-limit';
+import { ScoringService } from 'src/scoring/scoring.service';
+import { KW } from 'src/scoring/keywords';
+import { ExploreDto } from './dto/explore';
 // حد أقصى للتنزيلات المتزامنة
 const dlLimit = pLimit(4);
 const ipv4Lookup: https.AgentOptions['lookup'] = (hostname, _opts, cb) => {
@@ -35,6 +38,84 @@ const NET_RETRY_CODES = new Set([
   'ENOTFOUND', // DNS
   'EAI_AGAIN',
 ]);
+const gApi = axios.create({
+  timeout: 15000,
+  decompress: true,
+  proxy: false,
+  headers: { 'User-Agent': 'yanyana-backend/1.0', Accept: 'application/json' },
+  httpsAgent: new https.Agent({
+    keepAlive: false, // مهم لتفادي RST
+    family: 4 as any, // IPv4 فقط
+    lookup: ipv4Lookup, // نفس الlookup اللي عندك
+    servername: 'maps.googleapis.com',
+    maxSockets: 10,
+  }),
+  validateStatus: (s) => s >= 200 && s < 300,
+});
+type LatLng = { latitude: number; longitude: number };
+export interface PlaceV1 {
+  id: string;
+  displayName?: { text?: string };
+  location?: LatLng;
+  types?: string[];
+  rating?: number;
+  userRatingCount?: number;
+  priceLevel?: number; // 0..4 تقريباً (FREE..VERY_EXPENSIVE)
+  currentOpeningHours?: { openNow?: boolean };
+  regularOpeningHours?: {
+    periods?: { open?: { time?: string }; close?: { time?: string } }[];
+  };
+  editorialSummary?: { text?: string };
+  reviewSummary?: { text?: string };
+
+  // بعض السمات قد تأتي مباشرة أو داخل attributes حسب تطور الـ API
+  servesCoffee?: boolean;
+  outdoorSeating?: boolean;
+  liveMusic?: boolean;
+  attributes?: {
+    servesCoffee?: boolean;
+    outdoorSeating?: boolean;
+    liveMusic?: boolean;
+  };
+
+  // حقل مساعد داخلي لتجميع نصوص
+  _blob?: string;
+}
+const isTransient = (ax: AxiosError) =>
+  NET_RETRY_CODES.has((ax as any)?.code ?? '') ||
+  [502, 503, 504].includes(ax.response?.status ?? 0);
+async function gApiGet<T = any>(
+  url: string,
+  params: Record<string, any>,
+): Promise<T> {
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      const res = await gApi.get(url, { params });
+      return res.data as T;
+    } catch (e: any) {
+      if (attempt < 4 && isTransient(e)) {
+        const backoff = 300 * attempt + Math.floor(Math.random() * 200);
+        console.warn(
+          `[gApiGet] transient error, retry ${attempt} in ${backoff}ms`,
+          {
+            code: e?.code,
+            status: e?.response?.status,
+          },
+        );
+        await sleep(backoff);
+        continue;
+      }
+      console.error('[gApiGet] failed', {
+        code: e?.code,
+        status: e?.response?.status,
+        msg: e?.message,
+      });
+      throw e;
+    }
+  }
+  throw new Error('gApiGet: unreachable');
+}
+
 const baseClient = axios.create({
   timeout: 20000,
   maxRedirects: 0,
@@ -82,6 +163,7 @@ export class MapService {
     @InjectRepository(Photo) private readonly photoRepo: Repository<Photo>,
     @InjectRepository(SearchPoint)
     private readonly searchPointRepo: Repository<SearchPoint>,
+    private readonly scoring: ScoringService,
   ) {}
 
   async getNearbyPlaces(
@@ -382,7 +464,7 @@ export class MapService {
           params: {
             place_id: placeId,
             fields:
-              'name,photos,formatted_phone_number,opening_hours,reviews,website',
+              'name,geometry,types,rating,user_ratings_total,opening_hours,price_level,vicinity,website,editorial_summary,reviews,photos,formatted_phone_number,business_status,plus_code,icon',
             key: this.apiKey,
           },
         },
@@ -810,5 +892,232 @@ export class MapService {
       console.error('Overpass API Error:', error);
       throw new InternalServerErrorException('Failed to fetch data');
     }
+  }
+
+  // =============================
+  // Scoring system helpers
+  // ===========================
+
+  async exploreByMood(q: ExploreDto) {
+    const radius = Math.round((q.radiusKm ?? 5) * 1000);
+    const types = this.includedTypesForMood(q.mood!);
+
+    // 1) Nearby لكل type (مثل getNearbyPlaces بس بدون تخزين/عناوين)
+    const results = await Promise.all(
+      types.map((type) =>
+        gApiGet<any>(
+          'https://maps.googleapis.com/maps/api/place/nearbysearch/json',
+          {
+            location: `${q.lat},${q.lng}`,
+            radius,
+            type,
+            key: this.apiKey,
+            language: 'tr',
+            region: 'TR',
+          },
+        ).then((d) => d.results || []),
+      ),
+    );
+
+    // 2) دمج/تمييز حسب place_id
+    const merged = results.flat();
+    const uniqueMap = new Map<string, any>();
+    for (const it of merged) {
+      if (!uniqueMap.has(it.place_id)) uniqueMap.set(it.place_id, it);
+    }
+    const unique = Array.from(uniqueMap.values());
+
+    // 3) جلب التفاصيل + تحويل إلى PlaceV1 + سكور
+    const out: any[] = [];
+    for (const item of unique) {
+      const details = await this.getPlaceDetails(item.place_id);
+      const pv1 = this.toPlaceV1(item, details);
+      // فلترة "open now" إن مطلوبة
+      if (q.openNow && pv1.currentOpeningHours?.openNow === false) continue;
+
+      const scores = this.scoring.scoreAll(pv1);
+      const base = scores[q.mood!].score;
+      if (base < (q.minScore ?? 60)) continue;
+
+      // حساب المسافة
+      const loc = pv1.location;
+      const distanceKm =
+        loc?.latitude && loc?.longitude
+          ? this.haversineKm(q.lat, q.lng, loc.latitude, loc.longitude)
+          : 1e9;
+
+      const final = this.finalScore(
+        base,
+        pv1.rating,
+        pv1.userRatingCount,
+        pv1.currentOpeningHours?.openNow,
+        distanceKm,
+      );
+
+      out.push({
+        place: {
+          id: pv1.id,
+          name: pv1.displayName?.text,
+          lat: loc?.latitude,
+          lng: loc?.longitude,
+          types: pv1.types,
+          rating: pv1.rating,
+          userRatings: pv1.userRatingCount,
+          priceLevel: pv1.priceLevel,
+          openNow: pv1.currentOpeningHours?.openNow ?? null,
+          summary: pv1.editorialSummary?.text,
+        },
+        scores,
+        distanceKm: +distanceKm.toFixed(2),
+        final: +final.toFixed(2),
+      });
+    }
+
+    // 4) ترتيب حسب المطلوب
+    const sort = q.sort ?? 'best';
+    if (sort === 'distance') out.sort((a, b) => a.distanceKm - b.distanceKm);
+    else if (sort === 'rating')
+      out.sort((a, b) => (b.place.rating ?? 0) - (a.place.rating ?? 0));
+    else if (sort === 'popular')
+      out.sort(
+        (a, b) => (b.place.userRatings ?? 0) - (a.place.userRatings ?? 0),
+      );
+    else out.sort((a, b) => b.final - a.final);
+
+    return {
+      meta: {
+        count: Math.min(out.length, q.limit ?? 20),
+        mood: q.mood,
+        radiusKm: q.radiusKm,
+      },
+      items: out.slice(0, q.limit ?? 20),
+    };
+  }
+
+  /** دمج نصوص مفيدة للسكور من الملخص والمراجعات */
+  private buildBlob(details: any): string {
+    const parts: string[] = [];
+    if (details?.editorial_summary?.overview)
+      parts.push(details.editorial_summary.overview);
+    if (Array.isArray(details?.reviews)) {
+      for (const r of details.reviews.slice(0, 40)) {
+        if (r?.text) parts.push(String(r.text));
+      }
+    }
+    // vicinity أو name أحياناً فيها تلميحات (terrace, park, ...)
+    if (details?.vicinity) parts.push(details.vicinity);
+    if (details?.name) parts.push(details.name);
+
+    return parts.join(' ').toLowerCase();
+  }
+
+  /** استدلال سمات مبسّطة من الأنواع والنص */
+  private inferAttributes(types: string[] = [], blob: string) {
+    const tset = new Set(types);
+    const servesCoffee =
+      tset.has('cafe') ||
+      tset.has('coffee_shop') ||
+      KW.coffeeHints.some((k) => blob.includes(k));
+
+    const outdoorSeating = KW.outdoorHints.some((k) => blob.includes(k));
+    const liveMusic = KW.liveMusicHints.some((k) => blob.includes(k));
+
+    return { servesCoffee, outdoorSeating, liveMusic };
+  }
+
+  /** تحويل تفاصيل Google → PlaceV1 الذي يستهلكه ScoringService */
+  private toPlaceV1(fromNearby: any, details: any): PlaceV1 {
+    const blob = this.buildBlob(details);
+    const attrs = this.inferAttributes(
+      details?.types || fromNearby?.types || [],
+      blob,
+    );
+
+    const opening = details?.opening_hours;
+    const periods = Array.isArray(opening?.periods)
+      ? opening.periods.map((p: any) => ({
+          open: { time: p?.open?.time },
+          close: { time: p?.close?.time },
+        }))
+      : [];
+
+    const loc = details?.geometry?.location || fromNearby?.geometry?.location;
+
+    const p: PlaceV1 = {
+      id: fromNearby?.place_id || details?.place_id || details?.id,
+      displayName: { text: details?.name || fromNearby?.name },
+      location: loc ? { latitude: loc.lat, longitude: loc.lng } : undefined,
+      types: details?.types || fromNearby?.types || [],
+      rating: details?.rating,
+      userRatingCount: details?.user_ratings_total,
+      priceLevel: details?.price_level,
+      currentOpeningHours: { openNow: opening?.open_now ?? null },
+      regularOpeningHours: { periods },
+      editorialSummary: details?.editorial_summary?.overview
+        ? { text: details.editorial_summary.overview }
+        : undefined,
+      reviewSummary: undefined, // القديم ما عنده reviewSummary جاهز
+      servesCoffee: attrs.servesCoffee,
+      outdoorSeating: attrs.outdoorSeating,
+      liveMusic: attrs.liveMusic,
+      _blob: blob,
+    };
+    return p;
+  }
+
+  /** هافرسين بالكيلومتر */
+  private haversineKm(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const toRad = (x: number) => (x * Math.PI) / 180;
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  /** أنواع نستهدفها لكل مود */
+  private includedTypesForMood(
+    mood: 'study' | 'romantic' | 'classic',
+  ): string[] {
+    if (mood === 'study') return ['library', 'cafe', 'internet_cafe'];
+    if (mood === 'romantic')
+      return [
+        'restaurant',
+        'fine_dining_restaurant',
+        'wine_bar',
+        'park',
+        'garden',
+        'tourist_attraction',
+      ];
+    return [
+      'historical_place',
+      'historical_landmark',
+      'museum',
+      'cultural_landmark',
+      'art_gallery',
+      'tourist_attraction',
+    ];
+  }
+
+  /** ترتيب نهائي بسيط */
+  private finalScore(
+    base: number,
+    rating: number | undefined,
+    userCount: number | undefined,
+    openNow: boolean | undefined | null,
+    distanceKm: number,
+  ) {
+    const r = Math.min(Math.max(rating ?? 0, 3), 5);
+    const u = Math.max(userCount ?? 0, 0);
+    return (
+      base + (openNow ? 6 : 0) + r * 4 + Math.log(1 + u) * 2 - distanceKm * 0.8
+    );
   }
 }
